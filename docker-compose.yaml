@@ -1,0 +1,32 @@
+services:
+  pipeline:
+    build:
+      context: ./pipeline
+    volumes:
+      - ./input:/app/input
+      - ./pipeline/ontology:/app/ontology
+      - .cache:/app/cache/huggingface
+    image: ${PROJECT_PREFIX}-pipeline
+    env_file: .env
+    environment:
+      - ONTOLOGY_FILE_PATH=${ONTOLOGY_FILE_PATH}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DBNAME=${NEO4J_DBNAME}
+      - MODELS_DIR=${MODELS_DIR}
+      - HF_HOME=/app/cache/huggingface
+      - HF_HUB_CACHE=/app/cache/huggingface
+    tty: true
+    stdin_open: true
+    mem_limit: 10g
+    memswap_limit: 10g 
+    deploy:
+      resources:
+        limits:
+          memory: 10G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

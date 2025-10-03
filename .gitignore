@@ -1,0 +1,14 @@
+*.csv
+*.txt
+.dockerignore
+
+input/
+dataset/
+
+pipeline/output/*
+pipeline/.cache
+
+*/.vscode
+*/__pycache__
+
+.env
