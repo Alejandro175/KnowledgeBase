@@ -1,60 +1,50 @@
-import os
-from pathlib import Path
 import re
 from typing import Dict, List, Tuple
 from gliner import GLiNER
 
-MODELS_DIR = Path(os.getenv("HF_HUB_CACHE"))
-
 DEFAULT_LABELS = [
-  # Nomi & attori
-  "Malware Name",
-  "Malware Family",
-  "Malware Types",
-  "Attack Pattern",
-  "Strategy",
+    # Nomi & attori
+    "Malware Name",
+    "Malware Family",
+    "Malware Types",
+    "Attack Pattern",
+    "Strategy",
 
-  # indicatori
-  "Infrastructure",
-  "Application Software",
-  "Protocol",
-  "Endpoint",
-  "IP Address",
-  "Email Address",
-  "URL",
-  "File",
-  "Hash Value",
+    "Economic Sector",
+    "Industrial Sector",
+    "Politic organization",
 
-  # USER DATA
-  "User Information",
-  # System information
-  "System Information",
-  "Network",
+    # indicatori
+    "Infrastructure",
+    "Network",
+    "Application Software",
+    "Protocol",
+    "Endpoint",
+    "IP Address",
+    "Email Address",
+    "URL",
+    "File",
+    "Hash Value",
 
-  # LOCATIONS INFORMATION
-  "Country",
-  "Region",
-  "Year",
+    # USER DATA
+    "User Information",
+    "System Information",
 
-  # CAPABILITIES
-  "Encryption",
-  "Collection",
-  "Execution"
+    # LOCATIONS INFORMATION
+    "Country",
+    "Region",
+    "Year",
+
+    # CAPABILITIES
+    "C&C", 
+    "Encryption",
+    "Collection",
+    "Execution"
 ]
 
 class GlinerExtractor:
     def __init__(self, gliner_model_id: str = "gliner-community/gliner_large-v2.5", threshold: float = 0.70):
-        cache_folder_name = "models--" + gliner_model_id.replace("/", "--")
-        model_cache_path = MODELS_DIR / cache_folder_name
-        use_cache = model_cache_path.exists()
-
-        print(f"NER model Load from cache: {use_cache}")
-
-        self.ner_model = GLiNER.from_pretrained(
-            gliner_model_id,
-            cache_dir=str(MODELS_DIR),
-            local_files_only=use_cache
-        )
+        self.ner_model = GLiNER.from_pretrained(gliner_model_id)
         self.threshold = threshold
 
     @staticmethod
@@ -67,12 +57,7 @@ class GlinerExtractor:
     def _merge_predictions(
         entities_chunks: List[List[Tuple[str, str, float]]]
     ) -> List[List[Tuple[str, str, float]]]:
-        """
-        Algoritmo pairwise, senza funzioni di utilità:
-        - Prende l'entità 'attuale' nell'ordine di apparizione globale.
-        - Se trova lo stesso text con label diversa:
-            * se score(attuale) > score(altra) -> rimpiazza il label attuale
-        """
+
         # Costruisci una lista piatta di indici (chunk_idx, entity_idx) nell'ordine di apparizione
         flat_indices: List[Tuple[int, int]] = []
         for ci, chunk in enumerate(entities_chunks):
@@ -92,11 +77,8 @@ class GlinerExtractor:
                 ci_m, ei_m = flat_indices[m]
                 label_m, text_m, score_m = entities_chunks[ci_m][ei_m]
 
-                # stesso testo ma label diversa -> possibile rimpiazzo
                 if text_k == text_m and label_k != label_m:
                     if score_k > score_m:
-                        # rimpiazza l'altra con l'attuale
-                        #print(f"Change {entities_chunks[ci_m][ei_m]} to {(label_k, text_k, score_k)}")
                         entities_chunks[ci_m][ei_m] = (label_k, text_k, score_k)
 
         return entities_chunks
@@ -150,24 +132,26 @@ class GlinerExtractor:
             "Attack Pattern": "AttackPattern",
             "Strategy": "AttackPattern",
 
+            "Economic Sector": "Organization",
+            "Industrial Sector": "Organization",
+            "Politic organization": "Organization",
+
             "User Information": "Information",
             "System Information": "Information",
 
             "Infrastructure": "System",
             "Web System": "System",
             "Network": "System",
-            "IP Address": "Address",
-            "Email Address": "Email",
-            "Economic Sector": "Sector",
-            "Country": "Country",
-            "Region" : "Region",
-            "File": "File",
             "Application Software": "Software",
+
+            "IP Address": "IPAddress",
+            "Email Address": "EmailAddress",
             "URL": "URL",
             "Endpoint": "URL",
-            "Application Protocol": "Protocol",
             "Hash Value": "Hash",
 
+            "Application Protocol": "Protocols",
+            "C&C": "Characteristic",
             "Encryption" : "Capability",
             "Collection" : "Capability",
             "Execution" : "Capability"

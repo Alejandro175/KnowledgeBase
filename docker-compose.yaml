@@ -5,18 +5,19 @@ services:
     volumes:
       - ./input:/app/input
       - ./pipeline/ontology:/app/ontology
-      - .cache:/app/cache/huggingface
+      - llm-models:${MODELS_DIR}
     image: ${PROJECT_PREFIX}-pipeline
     env_file: .env
     environment:
-      - ONTOLOGY_FILE_PATH=${ONTOLOGY_FILE_PATH}
+      - ONTOLOGY_FILE=${ONTOLOGY_FILE_PATH}
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USERNAME=${NEO4J_USERNAME}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - NEO4J_DBNAME=${NEO4J_DBNAME}
-      - MODELS_DIR=${MODELS_DIR}
-      - HF_HOME=/app/cache/huggingface
-      - HF_HUB_CACHE=/app/cache/huggingface
+      - HF_HOME=${MODELS_DIR}
+      - HF_HUB_CACHE=${MODELS_DIR}
+      - NER_MODEL=${NER_MODEL}
+      - LLM_MODEL=${LLM_MODEL}
     tty: true
     stdin_open: true
     mem_limit: 10g
@@ -30,3 +31,26 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+  qa-service:
+    build:
+      context: ./qa-service
+    image: ${PROJECT_PREFIX}-qa
+    env_file: .env
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_TOKEN=${OPENAI_API_TOKEN}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DBNAME=${NEO4J_DBNAME}
+  client:
+    build:
+      context: ./client
+    ports:
+      - "8501:8501"
+
+volumes:
+  llm-models: {}
+    

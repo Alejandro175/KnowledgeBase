@@ -2,28 +2,26 @@ import os
 from pathlib import Path
 from time import sleep
 
-import torch
 from stages.FileReader import FileReader
 from stages.NerExtractor import GlinerExtractor
 from stages.ReLLM import RelationExtractorLLM
 from stages.TriplesValidator import TriplesValidator
 from stages.LoaderNeo4J import Neo4Jloader
 
-NEO4J_URI=os.getenv("NEO4J_URI")
-NEO4J_USERNAME=os.getenv("NEO4J_USERNAME")
-NEO4J_PASSWORD=os.getenv("NEO4J_PASSWORD")
-NEO4J_DBNAME=os.getenv("NEO4J_DBNAME")
+NEO4J_URI = os.getenv("NEO4J_URI")
+NEO4J_USERNAME = os.getenv("NEO4J_USERNAME")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+NEO4J_DBNAME = os.getenv("NEO4J_DBNAME")
 
-NER_MODEL_ID = "gliner-community/gliner_large-v2.5"
-LLM_MODEL_ID = "Qwen/Qwen3-4B-Instruct-2507-FP8"
+NER_MODEL_ID = os.getenv("NER_MODEL")
+LLM_MODEL_ID = os.getenv("LLM_MODEL")
 
-ONTOLOGY_PATH = "ontology/malwareOntology.rdf"
-OUTPUT_PATH = "output"
+ONTOLOGY_PATH = os.getenv("ONTOLOGY_FILE")
 
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 200
 NER_THRESHOLD = 0.52
-CHECK_INTERVAL = 5 #Secondi
+CHECK_INTERVAL = 5  # Secondi
 
 class Pipeline():
     def __init__(self):
@@ -32,7 +30,8 @@ class Pipeline():
         self.ExtractionStage = FileReader(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
         self.NERStage = GlinerExtractor(threshold=NER_THRESHOLD, gliner_model_id=NER_MODEL_ID)
         self.RelationExtractionStage = RelationExtractorLLM(model_id=LLM_MODEL_ID)
-        self.ValidationStage = TriplesValidator(ontology_path=ONTOLOGY_PATH, output_dir=OUTPUT_PATH)
+
+        self.ValidationStage = TriplesValidator(ontology_path=ONTOLOGY_PATH)
         
     def process_file(self, input_file: str):
 
@@ -61,7 +60,7 @@ class Pipeline():
         # Load on neo4J
         print("Triples load process.")
         self.LoadStage.run(rdf_output)
-
+        self.LoadStage.close()
 
         print("Fine esecuzione\n")
 
@@ -79,7 +78,6 @@ def main():
         while True:
             # Cerca file .txt nella directory input
             input_files = list(input_dir.glob("*.txt"))
-            print("Ciclo")
             if input_files:
                 for input_file in input_files:
                     try:

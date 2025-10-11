@@ -2,7 +2,7 @@ FROM pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime
 
 # Install Python 3.12 and venv
 RUN apt-get update && \
-    apt-get install -y gcc && \
+    apt-get install -y gcc openjdk-21-jre-headless && \
     rm -rf /var/lib/apt/lists/*
 
 # Set work directory

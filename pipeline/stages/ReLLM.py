@@ -1,99 +1,56 @@
-import os
-from pathlib import Path
 from typing import Tuple, List
 from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch, json
+import json
 
-MODELS_DIR = Path(os.getenv("HF_HUB_CACHE"))
-
-# --- 1) CONTEXT (una sola volta, nel role=system) ---
 context = """
-You are an LLM that extracts factual triples from English cybersecurity reports about an specific malware.
+You extract factual triples from cybersecurity reports about malware.
 
-TASK
-- Map entities mentioned in the input "chunk" or provided in "mentioned_entities" to the allowed relations and output factual triples.
+OUTPUT FORMAT (STRICT)
+<subject>,<relation>,<object>
+- One triple per line
+- Lowercase (except hashes: preserve exact format)
+- No duplicates, no extra text
 
-STRICT OUTPUT
-- Output triples strictly in this format (one per line): <subject text>,<relation>,<object text>
-- No extra text, no commentary, no JSON, no bullet points.
-- No duplicate lines. No leading/trailing spaces around commas.
+ALLOWED RELATIONS
+Malware,executes,AttackPattern
+Malware,targetSystem,System
+Malware,targetInformation,Information
+Malware,targetSoftware,Software
+Malware,hasLocation,Country/Region
+Malware,attackOrg,Organization
+Malware,isIndicatedByEmail,EmailAddress
+Malware,isIndicatedByFile,File
+Malware,isIndicatedByHash,Hash
+Malware,isIndicatedByUrl,URL
+Malware,isIndicatedByAddress,IPAddress
+Malware,isMember,Category
+Malware,hasCharacteristic,Capability
+Malware,hasCharacteristic,Protocols
 
-ALLOWED RELATIONS (subject class, relation, object class)
-- Malware,hasTargetSoftware,Software
-- Malware,execute,AttackPattern
-- Malware,ComunicateWith,System
-- Malware,compromise,System
-- Malware,hasLocation,Country
-- Malware,hasLocation,Region
-- Malware,hasTargetInformation,Information
-- Malware,hasTargetSector,Sector
-- Malware,isIndicatedBy,Email
-- Malware,isIndicatedBy,File
-- Malware,isIndicatedBy,Hash
-- Malware,isIndicatedBy,URL
-- Malware,isIndicatedBy,Address
-- Malware,isRelateTo,Category
-- Malware,hasCharacteristic,Capability
+RULES
+1. Use concrete values from chunk/mentioned_entities, never generic class names
+2. Subject MUST be the malware name (if missing, output nothing)
+3. ALWAYS extract isIndicatedBy for URLs, IPs, emails, files, hashes
+4. Multi-word entities: use hyphens (e.g., "c&c-server")
 
-MAPPING RULES (CRITICAL)
-1) Subjects and objects MUST be concrete strings from the chunk or from mentioned_entities. NEVER output generic class names (e.g., "Information", "Software", "Sector", "Country", "Region", "AttackPattern", "URL", "File", "Hash", "Address", "Infrastructure").
-2) Subject MUST be the concrete malware name from the chunk or mentioned_entities (type == "Malware"). If none is present, output nothing.
-4) ALWAYS emit isIndicatedBy triples for each URL, Email, IP Address present in the chunk or in mentioned_entities.
-5) For File and Hash, only emit if an explicit concrete string is present (e.g., a filename, hash value); do not generalize.
-6) Write the hash codes exactly as they are.
+INPUT
+{"chunk": "...", "mentioned_entities": [{"type":"...","text":"..."}]}
 
-VALIDATION CHECKLIST (apply before output)
-- Each line matches: <subject text>,<relation>,<object text>
-- Subject/object are concrete strings (not class names).
-- Relation is one of the allowed ones.
-- Remove duplicates (exact string equality across the whole line).
-
-INPUT FORMAT
-You will receive a JSON with:
-{
-  "chunk": "<string>",
-  "mentioned_entities": [
-    {"type": "<ClassName>", "text": "<verbatim string>"}
-    ...
-  ]
-}
-
-OUTPUT FORMAT
-One triple per line:
-<subject text>,<relation>,<object text>
-
-MINI-EXAMPLES
-Given:
-chunk: "OnionDuke communicates via the Tor network and was seen in Russia. Indicators include https://abc.example/onion and 185.21.15.3."
-mentioned_entities: [
-  {"type":"Malware","text":"OnionDuke"},
-  {"type":"Infrastructure","text":"tor-network"},
-  {"type":"Country","text":"Russia"}
-]
-
-Valid output:
-onionduke,communicateWith,c&c-server
-cloud-atlas,isIndicatedBy,bicorporate.dll
-cloud-atlas,isIndicatedBy,Car-for-sale.doc
-onionduke,hasLocation,Russia
-onionduke,isIndicatedBy,https://abc.example/onion
-onionduke,isIndicatedBy,185.21.15.3
+EXAMPLES
+onionduke,hasLocation,russia
+onionduke,hasCharacteristic,c&c-server
+onionduke,targetOrg,government-agencies
+onionduke,isIndicatedByUrl,https://abc.example/onion
+cloud-atlas,execute,cyber-espionage
+cloud-atlas,isIndicatedByFile,car-for-sale.doc
 """
-
 class RelationExtractorLLM:
     def __init__(self, model_id: str = "Qwen/Qwen3-4B-Instruct-2507-FP8"): 
-        cache_folder_name = "models--" + model_id.replace("/", "--")
-        model_cache_path = MODELS_DIR / cache_folder_name
-        use_cache = model_cache_path.exists()
-
-        print(f"LLM model Load from cache: {use_cache}")
-
-        self._tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=use_cache)
+        self._tokenizer = AutoTokenizer.from_pretrained(model_id)
         self._model = AutoModelForCausalLM.from_pretrained(
             model_id,
             torch_dtype="auto",
             device_map="auto",
-            local_files_only = use_cache
         )
 
     @staticmethod
@@ -159,11 +116,11 @@ class RelationExtractorLLM:
         output_ids = generated_ids[0][len(inputs.input_ids[0]):]
         content = self._tokenizer.decode(output_ids, skip_special_tokens=True).strip()
         
-        print("------------------")
-        print(text_chunk)
-        print("------------------")
-        print(content)
-        print("------------------")
+        #print("------------------")
+        #print(text_chunk)
+        #print("------------------")
+        #print(content)
+        #print("------------------")
 
         triples = []
         for line in content.splitlines():
@@ -171,11 +128,6 @@ class RelationExtractorLLM:
             if len(parts) == 3:
                 parts = self._clear_result(parts)
                 triples.append(tuple(parts))
-
-        for a in malwares_on_report:
-            for b in malwares_on_report:
-                if a != b:
-                    triples.append(tuple((a[1], "mentionedWith", b[1])))
 
         return triples
 
