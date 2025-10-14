@@ -4,33 +4,37 @@ from time import sleep
 
 from stages.FileReader import FileReader
 from stages.NerExtractor import GlinerExtractor
-from stages.ReLLM import RelationExtractorLLM
+from stages.RelationExtractor import RelationExtractorLLM
 from stages.TriplesValidator import TriplesValidator
-from stages.LoaderNeo4J import Neo4Jloader
+from stages.Neo4jWriter import Neo4jWriter
 
+# NEO4J Configuration
 NEO4J_URI = os.getenv("NEO4J_URI")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 NEO4J_DBNAME = os.getenv("NEO4J_DBNAME")
 
+# NER and LLM Configuration
 NER_MODEL_ID = os.getenv("NER_MODEL")
-LLM_MODEL_ID = os.getenv("LLM_MODEL")
+LLM_MODEL_ID = os.getenv("OPENAI_MODEL")
+OPENAI_KEY = os.getenv("OPENAI_API_TOKEN")
 
+# ONTOLOGY Configuration
 ONTOLOGY_PATH = os.getenv("ONTOLOGY_FILE")
 
+# Pipeline Configuration
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 200
 NER_THRESHOLD = 0.52
-CHECK_INTERVAL = 5  # Secondi
+CHECK_INTERVAL = 5 # Secondi
 
 class Pipeline():
     def __init__(self):
         print("Inizializzazione pipeline...")
-        self.LoadStage = Neo4Jloader(user_name=NEO4J_USERNAME, password=NEO4J_PASSWORD, uri=NEO4J_URI, database=NEO4J_DBNAME)
+        self.LoadStage = Neo4jWriter(user_name=NEO4J_USERNAME, password=NEO4J_PASSWORD, uri=NEO4J_URI, database=NEO4J_DBNAME)
         self.ExtractionStage = FileReader(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
         self.NERStage = GlinerExtractor(threshold=NER_THRESHOLD, gliner_model_id=NER_MODEL_ID)
-        self.RelationExtractionStage = RelationExtractorLLM(model_id=LLM_MODEL_ID)
-
+        self.RelationExtractionStage = RelationExtractorLLM(api_key=OPENAI_KEY, model=LLM_MODEL_ID)
         self.ValidationStage = TriplesValidator(ontology_path=ONTOLOGY_PATH)
         
     def process_file(self, input_file: str):
@@ -51,56 +55,50 @@ class Pipeline():
         # Creazione di relazioni
         print("Relation Extraction process.")
         triples_raw = self.RelationExtractionStage.run(output_chunks, output_entities)
-        print(triples_raw)
-        # Validazione triple
 
+        # Validazione triple
         print("Triples validation process.")
-        rdf_output = self.ValidationStage.run(triples_raw, output_entities, in_path.stem)
+        rdf_tmp_file = self.ValidationStage.run(triples_raw, output_entities, in_path.stem)
 
         # Load on neo4J
-        print("Triples load process.")
-        self.LoadStage.run(rdf_output)
+        #print("Triples load process.")
+        self.LoadStage.run(rdf_tmp_file, delete_after=True)
         self.LoadStage.close()
 
         print("Fine esecuzione\n")
 
 def main():
     pipeline = Pipeline()
-    
+    Path("temp").mkdir(exist_ok=True)
+
     # Crea le directory necessarie
-    input_dir = Path("input")
-    input_dir.mkdir(exist_ok=True)
+    input_dir = Path("input").mkdir(exist_ok=True)
 
     print(f"Monitoraggio della directory input ogni 5 secondi...")
     print("Premi Ctrl+C per interrompere.\n")
-    
+
     try:
         while True:
-            # Cerca file .txt nella directory input
             input_files = list(input_dir.glob("*.txt"))
+            
             if input_files:
-                for input_file in input_files:
-                    try:
-                        print(f"processando file: {input_file.name}")
-                        pipeline.process_file(str(input_file))
+                input_file = input_files[0]
+                
+                try:
+                    print(f"Processando file: {input_file.name}")
+                    pipeline.process_file(str(input_file))
+                    print(f"File {input_file.name} processato con successo.")
+                    
+                except Exception as e:
+                    print(f"Errore durante il processamento del file: {e}")
+                    
+                finally:
+                    input_file.unlink(missing_ok=True)
 
-                        print(f"File {input_file.name} processato con successo.")
-                        input_file.unlink()
-                        
-                    except Exception as e:
-                        print(f"Errore durante l'elaborazione di {input_file.name}: {e}")
-                        # In caso di errore, cancella comunque il file per evitare loop infiniti
-                        try:
-                            input_file.unlink()
-                            print(f"File {input_file.name} cancellato dopo errore.")
-                        except Exception as del_err:
-                            print(f"Impossibile cancellare {input_file.name}: {del_err}")
-            
-            # Attendi prima del prossimo controllo
             sleep(CHECK_INTERVAL)
-            
+
     except KeyboardInterrupt:
         print("\n\nMonitoraggio interrotto dall'utente.")
-
+    
 if __name__ == "__main__":
     main()

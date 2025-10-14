@@ -7,6 +7,9 @@ dataset/
 
 pipeline/output/*
 pipeline/.cache
+pipeline/stages/__pycache__
+pipeline/stages/temp/*
+pipeline/stages/ReLLM.py
 
 */.vscode
 */__pycache__

@@ -4,7 +4,7 @@ import time
 from difflib import SequenceMatcher
 
 class TriplesValidator:
-    def __init__(self, ontology_path: str, output_dir: str = "output"):
+    def __init__(self, ontology_path: str, output_dir: str = "temp"):
         self._ontology_path = ontology_path
         self._output_dir = output_dir
         self._ontology = get_ontology(self._ontology_path).load()

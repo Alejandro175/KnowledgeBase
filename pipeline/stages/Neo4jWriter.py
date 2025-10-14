@@ -1,8 +1,9 @@
+from pathlib import Path
 from rdflib_neo4j import HANDLE_VOCAB_URI_STRATEGY, Neo4jStoreConfig, Neo4jStore
 from neo4j.exceptions import ServiceUnavailable, SessionExpired
 from rdflib import Graph
 
-class Neo4Jloader:
+class Neo4jWriter:
     def __init__(self, uri: str, user_name: str, password: str, database: str = "neo4j"):
         self.auth_data = {'uri': uri, 'database': database, 'user': user_name, 'pwd': password}
         self.neo4jGraph = None
@@ -30,15 +31,22 @@ class Neo4Jloader:
         except (ServiceUnavailable, SessionExpired, AttributeError):
             return False
 
-    def run(self, input_file_path: str):
+    def run(self, input_file_path: str, delete_after: bool = True):
         if not self.is_connected():
             print("Connessione non attiva. Riprovo a connettermi...")
             try:
                 self._connect()
             except Exception as e:
                 raise RuntimeError(f"Impossibile ristabilire la connessione a Neo4j: {e}")
-        self.neo4jGraph.parse(input_file_path, format="application/rdf+xml")
-        self.neo4jGraph.close(True)
+            
+        try:
+            self.neo4jGraph.parse(input_file_path, format="application/rdf+xml")
+            self.neo4jGraph.close(True)
+        except Exception as e:
+            raise RuntimeError(f"Errore durante il caricamento dei dati in Neo4j: {e}")
+        finally:
+            if delete_after:
+                Path(input_file_path).unlink(missing_ok=True)
 
     def close(self):
         if self.neo4jGraph:
