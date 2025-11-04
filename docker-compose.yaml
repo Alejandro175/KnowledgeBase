@@ -1,53 +1,36 @@
 services:
-  pipeline:
+  graph-builder:
     build:
-      context: ./pipeline
+      context: ./graph-builder
     volumes:
-      - ./input:/app/input
-      - ./pipeline/ontology:/app/ontology
       - llm-models:${MODELS_DIR}
-    image: ${PROJECT_PREFIX}-pipeline
+    image: ${PROJECT_PREFIX}-builder
+    ports:
+      - "8055:8055"
     env_file: .env
     environment:
-      - ONTOLOGY_FILE=${ONTOLOGY_FILE_PATH}
-      - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - NEO4J_DBNAME=${NEO4J_DBNAME}
       - HF_HOME=${MODELS_DIR}
       - HF_HUB_CACHE=${MODELS_DIR}
-      - NER_MODEL=${NER_MODEL}
-      - LLM_MODEL=${LLM_MODEL}
     tty: true
     stdin_open: true
-    mem_limit: 10g
-    memswap_limit: 10g 
     deploy:
       resources:
-        limits:
-          memory: 10G
         reservations:
           devices:
             - driver: nvidia
-              count: all
-              capabilities: [gpu]
+              count: 1
+              capabilities: [ gpu ]
   qa-service:
     build:
-      context: ./qa-service
-    image: ${PROJECT_PREFIX}-qa
+      context: ./question-answering
+    image: ${PROJECT_PREFIX}-qa-service
     env_file: .env
     ports:
       - "8000:8000"
-    environment:
-      - OPENAI_API_TOKEN=${OPENAI_API_TOKEN}
-      - OPENAI_MODEL=${OPENAI_MODEL}
-      - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - NEO4J_DBNAME=${NEO4J_DBNAME}
   client:
     build:
       context: ./client
+    image: ${PROJECT_PREFIX}-client
     ports:
       - "8501:8501"
 

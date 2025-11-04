@@ -1,17 +1,18 @@
 *.csv
 *.txt
 .dockerignore
+.idea
 
 input/
 dataset/
 
-pipeline/output/*
 pipeline/.cache
-pipeline/stages/__pycache__
-pipeline/stages/temp/*
-pipeline/stages/ReLLM.py
+graph-builder/app/pipeline/stages/__pycache__
+graph-builder/app/pipeline/stages/temp/*
+pipeline/input
 
 */.vscode
 */__pycache__
 
 .env
+question-answering/test/.env.test
